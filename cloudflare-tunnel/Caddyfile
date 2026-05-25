@@ -1,0 +1,20 @@
+# =============================================================================
+# Caddyfile — Reverse proxy for Nextcloud AIO with Cloudflare DNS-01 ACME
+# =============================================================================
+# This Caddyfile obtains TLS certificates via the ACME DNS-01 challenge using
+# Cloudflare DNS, which does NOT require any inbound ports to be open.
+# It provides valid local TLS between Caddy and clients on the LAN, and
+# proxies traffic to Nextcloud AIO's Apache container.
+#
+# The Cloudflare Tunnel (cloudflared) handles public internet access separately.
+# This Caddy instance provides local HTTPS access and a valid certificate.
+# =============================================================================
+
+{
+	# Use ACME DNS-01 challenge via Cloudflare for all certificates
+	acme_dns cloudflare {env.CLOUDFLARE_API_TOKEN}
+}
+
+https://{$NEXTCLOUD_DOMAIN}:443 {
+	reverse_proxy localhost:{$APACHE_PORT}
+}
