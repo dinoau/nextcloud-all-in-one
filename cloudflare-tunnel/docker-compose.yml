@@ -1,0 +1,96 @@
+# =============================================================================
+# Nextcloud AIO + Cloudflare Tunnel + Caddy (ACME DNS-01 via Cloudflare)
+# =============================================================================
+#
+# This Compose file deploys:
+#   1. Nextcloud AIO mastercontainer (manages all Nextcloud services)
+#   2. Cloudflare Tunnel (cloudflared) for public access without port forwarding
+#   3. Caddy reverse proxy with Cloudflare DNS-01 ACME for local TLS certificates
+#
+# Usage:
+#   1. Copy .env.example to .env and fill in your values
+#   2. Run: docker compose up -d
+#   3. Access AIO interface at https://localhost:8080
+#
+# =============================================================================
+
+name: nextcloud-aio
+
+services:
+  # ---------------------------------------------------------------------------
+  # Nextcloud AIO Master Container
+  # ---------------------------------------------------------------------------
+  nextcloud-aio-mastercontainer:
+    image: ghcr.io/nextcloud-releases/all-in-one:latest
+    init: true
+    restart: always
+    container_name: nextcloud-aio-mastercontainer
+    volumes:
+      - nextcloud_aio_mastercontainer:/mnt/docker-aio-config
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    network_mode: bridge
+    ports:
+      - "8080:8080"   # AIO admin interface (self-signed cert)
+    environment:
+      - APACHE_PORT=${APACHE_PORT:-11000}
+      - APACHE_IP_BINDING=127.0.0.1         # Only allow local access (Caddy/cloudflared connect via localhost)
+      - SKIP_DOMAIN_VALIDATION=true          # Required: domain validation does not work behind Cloudflare Tunnel
+      - NEXTCLOUD_UPLOAD_LIMIT=${NEXTCLOUD_UPLOAD_LIMIT:-16G}
+      - TZ=${TZ:-UTC}
+      # Uncomment the following as needed:
+      # - NEXTCLOUD_DATADIR=${NEXTCLOUD_DATADIR:-/mnt/ncdata}
+      # - NEXTCLOUD_MEMORY_LIMIT=1024M       # Increase for LocalAI workloads
+      # - NEXTCLOUD_MAX_TIME=3600
+      # - COLLABORA_SECCOMP_DISABLED=false
+      # - NEXTCLOUD_STARTUP_APPS=deck twofactor_totp tasks calendar contacts notes
+      # - TALK_PORT=3478                      # Not useful behind CF Tunnel; use external TURN
+
+  # ---------------------------------------------------------------------------
+  # Cloudflare Tunnel (cloudflared)
+  # ---------------------------------------------------------------------------
+  # Provides public access to Nextcloud without opening any inbound ports.
+  # The tunnel connects outbound to Cloudflare's network.
+  # ---------------------------------------------------------------------------
+  cloudflared:
+    image: cloudflare/cloudflared:latest
+    restart: always
+    container_name: nextcloud-aio-cloudflared
+    command: tunnel run
+    environment:
+      - TUNNEL_TOKEN=${CLOUDFLARE_TUNNEL_TOKEN}
+    network_mode: host   # Needs access to localhost:${APACHE_PORT} where AIO Apache listens
+    depends_on:
+      - nextcloud-aio-mastercontainer
+
+  # ---------------------------------------------------------------------------
+  # Caddy Reverse Proxy (with Cloudflare DNS-01 ACME)
+  # ---------------------------------------------------------------------------
+  # Provides local HTTPS access with a valid Let's Encrypt certificate obtained
+  # via Cloudflare DNS-01 challenge (no open ports required for cert issuance).
+  # This is useful for LAN access and ensures valid TLS locally.
+  # ---------------------------------------------------------------------------
+  caddy:
+    image: ghcr.io/caddyserver/caddy-cloudflare:latest
+    restart: always
+    container_name: nextcloud-aio-caddy
+    network_mode: host   # Needs access to localhost:${APACHE_PORT}
+    environment:
+      - NEXTCLOUD_DOMAIN=${NEXTCLOUD_DOMAIN}
+      - APACHE_PORT=${APACHE_PORT:-11000}
+      - CLOUDFLARE_API_TOKEN=${CLOUDFLARE_API_TOKEN}
+    volumes:
+      - caddy_data:/data
+      - caddy_config:/config
+    configs:
+      - source: Caddyfile
+        target: /etc/caddy/Caddyfile
+
+configs:
+  Caddyfile:
+    file: ./Caddyfile
+
+volumes:
+  nextcloud_aio_mastercontainer:
+    name: nextcloud_aio_mastercontainer
+  caddy_data:
+  caddy_config:
