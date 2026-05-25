@@ -344,7 +344,7 @@ Enable these in the AIO interface at `https://localhost:8080`:
 - [ ] **Cloudflare caching**: Cloudflare will cache static assets automatically. Nextcloud sets appropriate cache headers
 - [ ] **PHP memory**: Increase `NEXTCLOUD_MEMORY_LIMIT` to `1024M` or higher when using LocalAI
 - [ ] **Redis**: Enabled by default in AIO — no action needed
-- [ ] **Upload chunking**: Configure Nextcloud Desktop Client to use 5 MB chunks when behind Cloudflare (free plan has 100 MB upload limit per request). See [Desktop Client chunking](https://github.com/nextcloud/desktop/issues/4271#issuecomment-1159578065)
+- [ ] **Upload chunking**: Configure Nextcloud Desktop Client to use small chunk sizes (e.g., 5 MB) when behind Cloudflare's free plan (100 MB upload limit per request). See the [Nextcloud Desktop Client documentation](https://docs.nextcloud.com/desktop/latest/) for chunking configuration
 
 ### Reliability
 
